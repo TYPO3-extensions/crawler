@@ -157,39 +157,53 @@ class tx_crawler_domain_process_manager  {
 		return $ret;
 	}
 
-	/**
-	 * starts new process
-	 * @throws Exception if no crawlerprocess was started
-	 */
-	public function startProcess() {
-		$ttl = (time() + $this->timeToLive -1);
-		$current = $this->processRepository->countNotTimeouted($ttl);
-		$completePath = '(' .escapeshellcmd($this->getCrawlerCliPath()) . ' &) > /dev/null';
-		if (system($completePath) === FALSE) {
-			throw new Exception('could not start process!');
-		}
-		else {
-			for ($i=0;$i<10;$i++) {
-				if ($this->processRepository->countNotTimeouted($ttl) > $current) {
-					return true;
-				}
-				sleep(1);
-			}
-			throw new Exception('Something went wrong: process did not appear within 10 seconds.');
-		}
-	}
+    /**
+     * starts new process
+     * @throws Exception if no crawlerprocess was started
+     */
+    public function startProcess() {
+        $ttl = (time() + $this->timeToLive -1);
+        $current = $this->processRepository->countNotTimeouted($ttl);
 
-	/**
-	 * Returns the path to start the crawler from the command line
-	 *
-	 * @return string
-	 */
-	public function getCrawlerCliPath(){
-		$phpPath 		= $this->crawlerObj->extensionSettings['phpPath'] . ' ';
-		$pathToTypo3 	= rtrim(t3lib_div::getIndpEnv('TYPO3_DOCUMENT_ROOT'), '/');
-		$pathToTypo3 	.= rtrim(t3lib_div::getIndpEnv('TYPO3_SITE_PATH'), '/');
-		$cliPart	 	= '/typo3/cli_dispatch.phpsh crawler';
-		return $phpPath.$pathToTypo3.$cliPart;
-	}
+        // Check whether OS is Windows
+        if ('WIN' === strtoupper(substr(PHP_OS, 0, 3))) {
+            $sCompletePath = escapeshellcmd('start ' . $this->getCrawlerCliPath());
+            $oFileHandler = popen($sCompletePath, 'r');
+            if ($oFileHandler !== false) {
+                pclose($oFileHandler);
+            }
+        }
+        else {
+            $sCompletePath = '(' .escapeshellcmd($this->getCrawlerCliPath()) . ' &) > /dev/null';
+            $oFileHandler = system($sCompletePath);
+        }
 
+        if ($oFileHandler === false) {
+            throw new Exception('could not start process!');
+        }
+        else {
+            for ($i=0;$i<10;$i++) {
+                if ($this->processRepository->countNotTimeouted($ttl) > $current) {
+                    return true;
+                }
+                sleep(1);
+            }
+            throw new Exception('Something went wrong: process did not appear within 10 seconds.');
+        }
+    }
+
+    /**
+     * Returns the path to start the crawler from the command line
+     *
+     * @return string
+     */
+    public function getCrawlerCliPath(){
+        $sPhpPath 		= $this->crawlerObj->extensionSettings['phpPath'] . ' ';
+        $sPathToTypo3 	= rtrim(\TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('TYPO3_DOCUMENT_ROOT'), '/');
+        $sPathToTypo3 	.= rtrim(\TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('TYPO3_SITE_PATH'), '/');
+        $sCliPart	 	= '/typo3/cli_dispatch.phpsh';
+        $sCliParameter  = "crawler";
+
+        return $sPhpPath . realpath($sPathToTypo3 . $sCliPart). " " . $sCliParameter;
+    }
 }

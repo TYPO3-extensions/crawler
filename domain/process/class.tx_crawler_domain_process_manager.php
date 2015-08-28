@@ -165,14 +165,27 @@ class tx_crawler_domain_process_manager  {
 	}
 
 	/**
-	 * starts new process
-	 * @throws Exception if no crawlerprocess was started
-	 */
+	* starts new process
+	* @throws Exception if no crawlerprocess was started
+	*/
 	public function startProcess() {
 		$ttl = (time() + $this->timeToLive -1);
 		$current = $this->processRepository->countNotTimeouted($ttl);
-		$completePath = '(' .escapeshellcmd($this->getCrawlerCliPath()) . ' &) > /dev/null';
-		if (system($completePath) === FALSE) {
+
+		// Check whether OS is Windows
+		if ('WIN' === strtoupper(substr(PHP_OS, 0, 3))) {
+			$sCompletePath = escapeshellcmd('start ' . $this->getCrawlerCliPath());
+			$oFileHandler = popen($sCompletePath, 'r');
+			if ($oFileHandler !== false) {
+				pclose($oFileHandler);
+			}
+		}
+		else {
+			$sCompletePath = '(' .escapeshellcmd($this->getCrawlerCliPath()) . ' &) > /dev/null';
+			$oFileHandler = system($sCompletePath);
+		}
+
+		if ($oFileHandler === false) {
 			throw new Exception('could not start process!');
 		}
 		else {
@@ -187,16 +200,17 @@ class tx_crawler_domain_process_manager  {
 	}
 
 	/**
-	 * Returns the path to start the crawler from the command line
-	 *
-	 * @return string
-	 */
+	* Returns the path to start the crawler from the command line
+	*
+	* @return string
+	*/
 	public function getCrawlerCliPath(){
-		$phpPath 		= $this->crawlerObj->extensionSettings['phpPath'] . ' ';
-		$pathToTypo3 	= rtrim(t3lib_div::getIndpEnv('TYPO3_DOCUMENT_ROOT'), '/');
-		$pathToTypo3 	.= rtrim(t3lib_div::getIndpEnv('TYPO3_SITE_PATH'), '/');
-		$cliPart	 	= '/typo3/cli_dispatch.phpsh crawler';
-		return $phpPath.$pathToTypo3.$cliPart;
-	}
+		$sPhpPath 		= $this->crawlerObj->extensionSettings['phpPath'] . ' ';
+		$sPathToTypo3 	= rtrim(\TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('TYPO3_DOCUMENT_ROOT'), '/');
+		$sPathToTypo3 	.= rtrim(\TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('TYPO3_SITE_PATH'), '/');
+		$sCliPart	 	= '/typo3/cli_dispatch.phpsh';
+		$sCliParameter  = "crawler";
 
+		return $sPhpPath . realpath($sPathToTypo3 . $sCliPart). " " . $sCliParameter;
+	}
 }
